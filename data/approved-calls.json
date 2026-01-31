@@ -144,5 +144,24 @@
     "approvedAt": "2026-01-31T19:12:56.584Z",
     "executedAt": "2026-01-31T19:12:57.052Z",
     "callSid": "CA9630e3ead1aff3a1b432f4dc75eaed44"
+  },
+  {
+    "requestId": "call-req-1769887163718-alzoo1v2v",
+    "timestamp": "2026-01-31T19:19:23.718Z",
+    "status": "executed",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Test with mulaw audio conversion",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-01-31T19:19:23.718Z",
+      "expiresAt": "2026-02-01T19:19:23.718Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-01-31T19:19:27.574Z",
+    "executedAt": "2026-01-31T19:19:28.031Z",
+    "callSid": "CA09233c8148b426c2ea5b2299563fcbf1"
   }
 ]
