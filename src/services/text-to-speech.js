@@ -2,6 +2,11 @@ import OpenAI from 'openai';
 import { logger } from '../utils/logger.js';
 import { Readable } from 'stream';
 import fetch from 'node-fetch';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegPath from '@ffmpeg-installer/ffmpeg';
+
+// Set ffmpeg path
+ffmpeg.setFfmpegPath(ffmpegPath.path);
 
 // Simple rate limiter for ElevenLabs
 class RateLimiter {
@@ -41,7 +46,7 @@ export class TextToSpeech {
     // Initialize ElevenLabs via HTTP API
     if (this.provider === 'elevenlabs' && process.env.ELEVENLABS_API_KEY) {
       this.elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
-      this.voiceId = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Rachel
+      this.voiceId = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM';
       logger.info('ElevenLabs TTS initialized', { voiceId: this.voiceId });
     } 
     // Fallback to OpenAI
@@ -106,16 +111,16 @@ export class TextToSpeech {
             },
             body: JSON.stringify({
               text: text,
-              model_id: 'eleven_turbo_v2_5', // Fast and high quality
+              model_id: 'eleven_turbo_v2_5',
               voice_settings: {
                 stability: 0.5,
                 similarity_boost: 0.75,
                 style: 0.3,
                 use_speaker_boost: true
               },
-              output_format: 'mp3_44100_128' // Good quality MP3
+              output_format: 'mp3_44100_128'
             }),
-            timeout: 15000 // 15 second timeout
+            timeout: 15000
           });
 
           if (!response.ok) {
@@ -124,7 +129,7 @@ export class TextToSpeech {
             // If rate limited, wait and retry
             if (response.status === 429) {
               logger.warn('Rate limited, waiting before retry', { retries });
-              await this.sleep(2000); // Wait 2 seconds
+              await this.sleep(2000);
               retries--;
               continue;
             }
@@ -132,20 +137,28 @@ export class TextToSpeech {
             throw new Error(`ElevenLabs API error: ${response.status} ${error}`);
           }
 
-          // Get the audio stream and convert to chunks
-          const audioBuffer = await response.buffer();
+          // Get the audio buffer
+          const mp3Buffer = await response.buffer();
           
           logger.info('ElevenLabs audio received', { 
-            size: audioBuffer.length,
+            size: mp3Buffer.length,
             format: 'mp3'
           });
 
-          // Convert to Twilio format and return
-          return this.bufferToMulawChunks(audioBuffer);
+          // Convert MP3 to mulaw PCM for Twilio
+          const mulawBuffer = await this.convertToMulaw(mp3Buffer);
+          
+          logger.info('Audio converted to mulaw', { 
+            originalSize: mp3Buffer.length,
+            mulawSize: mulawBuffer.length
+          });
+
+          // Return as chunks
+          return this.bufferToChunks(mulawBuffer);
 
         } catch (error) {
           lastError = error;
-          if (retries > 0) {
+          if (retries > 0 && !error.message.includes('ffmpeg')) {
             logger.warn('ElevenLabs request failed, retrying', { 
               retries, 
               error: error.message 
@@ -174,19 +187,53 @@ export class TextToSpeech {
     }
   }
 
+  async convertToMulaw(mp3Buffer) {
+    return new Promise((resolve, reject) => {
+      const chunks = [];
+      
+      // Create readable stream from buffer
+      const inputStream = new Readable();
+      inputStream.push(mp3Buffer);
+      inputStream.push(null);
+
+      // Convert MP3 to mulaw PCM using ffmpeg
+      ffmpeg(inputStream)
+        .inputFormat('mp3')
+        .audioCodec('pcm_mulaw')
+        .audioFrequency(8000)
+        .audioChannels(1)
+        .format('mulaw')
+        .on('error', (err) => {
+          logger.error('FFmpeg conversion error', { error: err.message });
+          reject(err);
+        })
+        .on('end', () => {
+          const buffer = Buffer.concat(chunks);
+          resolve(buffer);
+        })
+        .pipe()
+        .on('data', (chunk) => {
+          chunks.push(chunk);
+        });
+    });
+  }
+
   async synthesizeOpenAI(text) {
     try {
       const mp3 = await this.openai.audio.speech.create({
-        model: 'tts-1', // Fast model
+        model: 'tts-1',
         voice: this.voice,
         input: text,
         speed: 0.95,
-        response_format: 'opus' // Good quality
+        response_format: 'pcm' // Get PCM directly
       });
 
       const buffer = Buffer.from(await mp3.arrayBuffer());
       
-      return this.bufferToMulawChunks(buffer);
+      // Convert to mulaw
+      const mulawBuffer = await this.convertPCMToMulaw(buffer);
+      
+      return this.bufferToChunks(mulawBuffer);
 
     } catch (error) {
       logger.error('OpenAI TTS error', { error: error.message });
@@ -194,9 +241,36 @@ export class TextToSpeech {
     }
   }
 
+  async convertPCMToMulaw(pcmBuffer) {
+    return new Promise((resolve, reject) => {
+      const chunks = [];
+      
+      const inputStream = new Readable();
+      inputStream.push(pcmBuffer);
+      inputStream.push(null);
+
+      ffmpeg(inputStream)
+        .inputFormat('s16le') // 16-bit PCM
+        .audioCodec('pcm_mulaw')
+        .audioFrequency(8000)
+        .audioChannels(1)
+        .format('mulaw')
+        .on('error', (err) => {
+          logger.error('FFmpeg PCM conversion error', { error: err.message });
+          reject(err);
+        })
+        .on('end', () => {
+          resolve(Buffer.concat(chunks));
+        })
+        .pipe()
+        .on('data', (chunk) => {
+          chunks.push(chunk);
+        });
+    });
+  }
+
   async mockSynthesize(text) {
     logger.warn('Using mock audio synthesis');
-    // Return silence for testing
     const chunks = [];
     const silenceLength = Math.min(text.length * 30, 2000);
     const numChunks = Math.floor(silenceLength / 20);
@@ -207,22 +281,27 @@ export class TextToSpeech {
     return chunks;
   }
 
-  bufferToMulawChunks(mp3Buffer) {
-    // For now, we'll send the MP3 directly in chunks
-    // Twilio can handle various audio formats
-    // If audio quality is poor, we'd need ffmpeg conversion
-    
-    const CHUNK_SIZE = 8000; // Larger chunks for compressed audio
+  bufferToChunks(mulawBuffer) {
+    // Split mulaw audio into chunks suitable for Twilio
+    const CHUNK_SIZE = 160; // 20ms of audio at 8kHz mulaw
     const chunks = [];
     
-    for (let i = 0; i < mp3Buffer.length; i += CHUNK_SIZE) {
-      const chunk = mp3Buffer.slice(i, Math.min(i + CHUNK_SIZE, mp3Buffer.length));
-      chunks.push(chunk);
+    for (let i = 0; i < mulawBuffer.length; i += CHUNK_SIZE) {
+      const chunk = mulawBuffer.slice(i, Math.min(i + CHUNK_SIZE, mulawBuffer.length));
+      // Pad last chunk if needed
+      if (chunk.length < CHUNK_SIZE) {
+        const padded = Buffer.alloc(CHUNK_SIZE, 0xFF);
+        chunk.copy(padded);
+        chunks.push(padded);
+      } else {
+        chunks.push(chunk);
+      }
     }
     
-    logger.info('Audio chunked', { 
+    logger.info('Audio chunked for Twilio', { 
       totalChunks: chunks.length,
-      totalSize: mp3Buffer.length 
+      totalSize: mulawBuffer.length,
+      format: 'mulaw'
     });
     
     return chunks;

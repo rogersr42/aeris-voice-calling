@@ -32,5 +32,117 @@
     },
     "approvedBy": "Roger Rieder",
     "approvedAt": "2026-01-31T17:49:01.944Z"
+  },
+  {
+    "requestId": "call-req-1769884063999-9s3oq1rox",
+    "timestamp": "2026-01-31T18:27:43.999Z",
+    "status": "executed",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Test call - Roger requested to hear Aeris voice",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-01-31T18:27:43.999Z",
+      "expiresAt": "2026-02-01T18:27:43.999Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-01-31T18:27:48.065Z",
+    "executedAt": "2026-01-31T18:27:59.352Z",
+    "callSid": "CAf9cc58aeae6ce9d20802962bde3c2ae2"
+  },
+  {
+    "requestId": "call-req-1769884586835-6dh3uglc5",
+    "timestamp": "2026-01-31T18:36:26.835Z",
+    "status": "executed",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Test call after voice ID fix",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-01-31T18:36:26.835Z",
+      "expiresAt": "2026-02-01T18:36:26.835Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-01-31T18:36:30.845Z",
+    "executedAt": "2026-01-31T18:36:31.318Z",
+    "callSid": "CAa22b915958c715b0c5e077ff4b09a28a"
+  },
+  {
+    "requestId": "call-req-1769885097491-phrm9w10y",
+    "timestamp": "2026-01-31T18:44:57.491Z",
+    "status": "approved",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Test call with new ElevenLabs API key",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-01-31T18:44:57.491Z",
+      "expiresAt": "2026-02-01T18:44:57.491Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-01-31T18:44:57.584Z"
+  },
+  {
+    "requestId": "call-req-1769885106593-rfj99j3vf",
+    "timestamp": "2026-01-31T18:45:06.594Z",
+    "status": "executed",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Test with new API key",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-01-31T18:45:06.594Z",
+      "expiresAt": "2026-02-01T18:45:06.594Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-01-31T18:45:10.264Z",
+    "executedAt": "2026-01-31T18:45:14.123Z",
+    "callSid": "CAa3999200cf0c1a2aa0dc8aff58cd8727"
+  },
+  {
+    "requestId": "call-req-1769885190856-13gw31s70",
+    "timestamp": "2026-01-31T18:46:30.856Z",
+    "status": "executed",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Final test - new API key deployed",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-01-31T18:46:30.856Z",
+      "expiresAt": "2026-02-01T18:46:30.856Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-01-31T18:46:35.618Z",
+    "executedAt": "2026-01-31T18:46:36.077Z",
+    "callSid": "CA5d56b89e68aaf427e2d803b3efcec29c"
+  },
+  {
+    "requestId": "call-req-1769886772493-1gg63fdwb",
+    "timestamp": "2026-01-31T19:12:52.493Z",
+    "status": "executed",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Test with rate limiting fix",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-01-31T19:12:52.493Z",
+      "expiresAt": "2026-02-01T19:12:52.493Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-01-31T19:12:56.584Z",
+    "executedAt": "2026-01-31T19:12:57.052Z",
+    "callSid": "CA9630e3ead1aff3a1b432f4dc75eaed44"
   }
 ]

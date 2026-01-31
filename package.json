@@ -15,16 +15,18 @@
     "call:execute": "node src/initiate-call.js execute"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "ws": "^8.16.0",
-    "twilio": "^5.0.0",
     "@deepgram/sdk": "^3.4.0",
-    "openai": "^4.28.0",
-    "elevenlabs": "^0.8.2",
-    "dotenv": "^16.4.1",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "axios": "^1.6.7",
+    "dotenv": "^16.4.1",
+    "elevenlabs": "^0.8.2",
+    "express": "^4.18.2",
+    "fluent-ffmpeg": "^2.1.3",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.28.0",
+    "twilio": "^5.0.0",
     "uuid": "^9.0.1",
-    "node-fetch": "^3.3.2"
+    "ws": "^8.16.0"
   },
   "devDependencies": {
     "ngrok": "^5.0.0-beta.2"
