@@ -1,0 +1,35 @@
+{
+  "name": "aeris-voice-calling",
+  "version": "1.0.0",
+  "description": "Production-ready AI voice calling system for Twilio with restaurant-grade voice quality",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node tests/test-call.js",
+    "ngrok": "ngrok http 3000",
+    "call:request": "node src/initiate-call.js request",
+    "call:list": "node src/initiate-call.js list",
+    "call:approve": "node src/initiate-call.js approve",
+    "call:execute": "node src/initiate-call.js execute"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.16.0",
+    "twilio": "^5.0.0",
+    "@deepgram/sdk": "^3.4.0",
+    "openai": "^4.28.0",
+    "elevenlabs": "^0.8.2",
+    "dotenv": "^16.4.1",
+    "axios": "^1.6.7",
+    "uuid": "^9.0.1",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "ngrok": "^5.0.0-beta.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

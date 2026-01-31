@@ -1,0 +1,36 @@
+[
+  {
+    "requestId": "call-req-1769875272854-64xflqory",
+    "timestamp": "2026-01-31T16:01:12.854Z",
+    "status": "approved",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Test call",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-01-31T16:01:12.854Z",
+      "expiresAt": "2026-02-01T16:01:12.854Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-01-31T16:01:14.923Z"
+  },
+  {
+    "requestId": "call-req-1769881738951-w5f0wkjl3",
+    "timestamp": "2026-01-31T17:48:58.951Z",
+    "status": "approved",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Test call requested by Roger - voice system test",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-01-31T17:48:58.951Z",
+      "expiresAt": "2026-02-01T17:48:58.951Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-01-31T17:49:01.944Z"
+  }
+]
