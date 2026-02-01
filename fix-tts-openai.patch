@@ -1,0 +1,52 @@
+--- a/src/services/text-to-speech.js
++++ b/src/services/text-to-speech.js
+@@ -1,6 +1,7 @@
+ import fetch from 'node-fetch';
++import OpenAI from 'openai';
+ import logger from '../utils/logger.js';
+-
++const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+ 
+ /**
+  * Convert text to speech using ElevenLabs API
+@@ -10,6 +11,40 @@ import logger from '../utils/logger.js';
+  */
+ async function synthesizeSpeech(text, streamSid) {
+   try {
++    // Use OpenAI TTS - proven to work with Twilio
++    logger.info('🎙️ Generating speech with OpenAI TTS', {
++      streamSid,
++      textLength: text.length,
++      voice: 'nova'
++    });
++
++    const mp3Response = await openai.audio.speech.create({
++      model: 'tts-1',
++      voice: 'nova',
++      input: text,
++      response_format: 'pcm' // Get raw PCM
++    });
++
++    // Get PCM buffer
++    const pcmBuffer = Buffer.from(await mp3Response.arrayBuffer());
++    
++    // Convert PCM to mulaw (simple downsample + encode)
++    const { default: mulaw } = await import('alawmulaw');
++    
++    // Downsample 24kHz -> 8kHz (take every 3rd sample)
++    const pcm16 = new Int16Array(pcmBuffer.buffer, pcmBuffer.byteOffset, pcmBuffer.length / 2);
++    const downsampled = new Int16Array(Math.floor(pcm16.length / 3));
++    for (let i = 0; i < downsampled.length; i++) {
++      downsampled[i] = pcm16[i * 3];
++    }
++    
++    // Encode to mulaw
++    const mulawData = mulaw.encode(downsampled);
++    const audioBuffer = Buffer.from(mulawData);
++
++    logger.info('✅ OpenAI TTS successful', { streamSid, audioBytes: audioBuffer.length });
++    return audioBuffer;
++
+     const apiKey = process.env.ELEVENLABS_API_KEY;
+     const voiceId = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM';
+     
