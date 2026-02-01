@@ -21,6 +21,12 @@ export async function handleMediaStream(ws, req) {
   let lastSpeechTime = Date.now();
   let isSpeaking = false;
   let isProcessing = false;
+  let audioChunkCount = 0;
+  
+  // Constants for speech detection
+  const MIN_SPEECH_BUFFER = 8000;  // ~1 second at 8kHz
+  const MAX_SPEECH_BUFFER = 64000; // ~8 seconds max
+  const SILENCE_THRESHOLD = 1500;  // 1.5 seconds of silence
 
   // Handle WebSocket messages from Twilio
   ws.on('message', async (message) => {
@@ -50,23 +56,29 @@ export async function handleMediaStream(ws, req) {
             audioBuffer = Buffer.concat([audioBuffer, audioChunk]);
             lastSpeechTime = Date.now();
             isSpeaking = true;
+            audioChunkCount++;
 
-            // Log every 5000 bytes to track incoming audio
-            if (audioBuffer.length % 5000 < 200) {
+            // Log periodically to track incoming audio
+            if (audioChunkCount % 50 === 0) {
               logger.info('Receiving audio from user', { 
                 bufferSize: audioBuffer.length,
+                chunks: audioChunkCount,
                 isProcessing 
               });
             }
 
-            // Process when we have enough audio or silence detected
-            if (!isProcessing && audioBuffer.length > 16000) {
+            // Auto-process if buffer gets too large (prevent overflow)
+            if (!isProcessing && audioBuffer.length >= MAX_SPEECH_BUFFER) {
               isProcessing = true;
-              logger.info('Processing user speech', { bufferSize: audioBuffer.length });
+              logger.info('Max buffer reached, processing speech', { 
+                bufferSize: audioBuffer.length,
+                chunks: audioChunkCount 
+              });
               await processSpeech(audioBuffer, ws, stt, tts, conversation, streamSid);
               audioBuffer = Buffer.alloc(0);
               isSpeaking = false;
               isProcessing = false;
+              audioChunkCount = 0;
             }
           }
           break;
@@ -88,17 +100,26 @@ export async function handleMediaStream(ws, req) {
     }
   });
 
-  // Silence detection timer
+  // Silence detection timer - check every 200ms
   const silenceChecker = setInterval(async () => {
-    if (!isProcessing && isSpeaking && Date.now() - lastSpeechTime > 1200 && audioBuffer.length > 4000) {
+    const silenceDuration = Date.now() - lastSpeechTime;
+    const hasEnoughAudio = audioBuffer.length >= MIN_SPEECH_BUFFER;
+    const hasSilence = silenceDuration > SILENCE_THRESHOLD;
+    
+    if (!isProcessing && isSpeaking && hasEnoughAudio && hasSilence) {
       isProcessing = true;
-      logger.info('Silence detected, processing speech', { bufferSize: audioBuffer.length });
+      logger.info('Silence detected, processing speech', { 
+        bufferSize: audioBuffer.length,
+        chunks: audioChunkCount,
+        silenceDuration 
+      });
       await processSpeech(audioBuffer, ws, stt, tts, conversation, streamSid);
       audioBuffer = Buffer.alloc(0);
       isSpeaking = false;
       isProcessing = false;
+      audioChunkCount = 0;
     }
-  }, 300);
+  }, 200);
 
   ws.on('close', () => {
     clearInterval(silenceChecker);
@@ -121,33 +142,56 @@ async function sendGreeting(ws, tts, conversation, streamSid) {
 }
 
 async function processSpeech(audioBuffer, ws, stt, tts, conversation, streamSid) {
-  if (audioBuffer.length < 4000) {
-    logger.debug('Audio buffer too short', { size: audioBuffer.length });
+  const MIN_AUDIO_SIZE = 4000; // ~0.5 seconds
+  
+  if (audioBuffer.length < MIN_AUDIO_SIZE) {
+    logger.debug('Audio buffer too short, skipping', { 
+      size: audioBuffer.length,
+      minimum: MIN_AUDIO_SIZE 
+    });
     return;
   }
 
   try {
-    logger.info('Starting transcription', { audioSize: audioBuffer.length });
+    logger.info('🎤 Starting speech processing', { 
+      audioSize: audioBuffer.length,
+      durationEstimate: `${(audioBuffer.length / 8000).toFixed(1)}s`
+    });
     
     // Convert speech to text
+    const transcriptStartTime = Date.now();
     const transcript = await stt.transcribe(audioBuffer);
+    const transcriptDuration = Date.now() - transcriptStartTime;
     
     if (!transcript || transcript.trim().length === 0) {
-      logger.warn('No speech detected in audio', { audioSize: audioBuffer.length });
+      logger.warn('⚠️ Empty transcription result', { 
+        audioSize: audioBuffer.length,
+        transcriptDuration 
+      });
       return;
     }
 
-    logger.info('Transcribed speech', { transcript });
+    logger.info('✅ User said', { 
+      transcript,
+      transcriptDuration: `${transcriptDuration}ms`
+    });
 
     // Get AI response
+    const aiStartTime = Date.now();
     const response = await conversation.processMessage(transcript);
-    logger.info('AI response generated', { response: response.substring(0, 100) });
+    const aiDuration = Date.now() - aiStartTime;
+    
+    logger.info('🤖 AI responded', { 
+      preview: response.substring(0, 100) + (response.length > 100 ? '...' : ''),
+      length: response.length,
+      aiDuration: `${aiDuration}ms`
+    });
 
     // Convert response to speech and send
     await sendAudioResponse(ws, tts, response, streamSid);
 
   } catch (error) {
-    logger.error('Error processing speech', { 
+    logger.error('❌ Error processing speech', { 
       error: error.message,
       stack: error.stack,
       audioSize: audioBuffer.length
