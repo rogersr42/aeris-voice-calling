@@ -2,11 +2,14 @@ import OpenAI from 'openai';
 import { logger } from '../utils/logger.js';
 import { Readable } from 'stream';
 import fetch from 'node-fetch';
-import ffmpeg from 'fluent-ffmpeg';
-import ffmpegPath from '@ffmpeg-installer/ffmpeg';
+import { pcm16ToMulaw, resamplePCM, stereoToMono } from '../utils/mulaw-encoder.js';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { writeFile, unlink } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
-// Set ffmpeg path
-ffmpeg.setFfmpegPath(ffmpegPath.path);
+const execPromise = promisify(exec);
 
 // Simple rate limiter for ElevenLabs
 class RateLimiter {
@@ -188,34 +191,62 @@ export class TextToSpeech {
   }
 
   async convertToMulaw(mp3Buffer) {
-    return new Promise((resolve, reject) => {
-      const chunks = [];
+    try {
+      // First decode MP3 to PCM using ffmpeg (if available), otherwise use system ffmpeg
+      const tempMp3 = join(tmpdir(), `tts-${Date.now()}.mp3`);
+      const tempPcm = join(tmpdir(), `tts-${Date.now()}.pcm`);
       
-      // Create readable stream from buffer
-      const inputStream = new Readable();
-      inputStream.push(mp3Buffer);
-      inputStream.push(null);
-
-      // Convert MP3 to mulaw PCM using ffmpeg
-      ffmpeg(inputStream)
-        .inputFormat('mp3')
-        .audioCodec('pcm_mulaw')
-        .audioFrequency(8000)
-        .audioChannels(1)
-        .format('mulaw')
-        .on('error', (err) => {
-          logger.error('FFmpeg conversion error', { error: err.message });
-          reject(err);
-        })
-        .on('end', () => {
-          const buffer = Buffer.concat(chunks);
-          resolve(buffer);
-        })
-        .pipe()
-        .on('data', (chunk) => {
-          chunks.push(chunk);
+      await writeFile(tempMp3, mp3Buffer);
+      
+      // Try to decode MP3 to raw PCM
+      try {
+        await execPromise(
+          `ffmpeg -i "${tempMp3}" -f s16le -ar 24000 -ac 1 "${tempPcm}" -y`,
+          { timeout: 10000 }
+        );
+      } catch (ffmpegError) {
+        logger.warn('FFmpeg not available, falling back to mock audio', { 
+          error: ffmpegError.message 
         });
-    });
+        // Clean up temp files
+        await unlink(tempMp3).catch(() => {});
+        await unlink(tempPcm).catch(() => {});
+        throw new Error('FFmpeg unavailable');
+      }
+      
+      // Read the PCM file
+      const fs = await import('fs/promises');
+      const pcmBuffer = await fs.readFile(tempPcm);
+      
+      // Clean up temp files
+      await unlink(tempMp3).catch(() => {});
+      await unlink(tempPcm).catch(() => {});
+      
+      // Convert PCM to mulaw using pure JS
+      const pcmData = new Int16Array(
+        pcmBuffer.buffer,
+        pcmBuffer.byteOffset,
+        pcmBuffer.length / 2
+      );
+      
+      // Resample from 24kHz to 8kHz for Twilio
+      const resampled = resamplePCM(pcmBuffer, 24000, 8000);
+      
+      // Encode to mulaw
+      const mulawBuffer = pcm16ToMulaw(resampled);
+      
+      logger.info('Audio converted to mulaw (JS encoder)', {
+        originalSize: mp3Buffer.length,
+        pcmSize: pcmBuffer.length,
+        mulawSize: mulawBuffer.length
+      });
+      
+      return mulawBuffer;
+      
+    } catch (error) {
+      logger.error('MP3 to mulaw conversion failed', { error: error.message });
+      throw error;
+    }
   }
 
   async synthesizeOpenAI(text) {
@@ -230,8 +261,8 @@ export class TextToSpeech {
 
       const buffer = Buffer.from(await mp3.arrayBuffer());
       
-      // Convert to mulaw
-      const mulawBuffer = await this.convertPCMToMulaw(buffer);
+      // OpenAI returns PCM at 24kHz, mono, 16-bit
+      const mulawBuffer = await this.convertPCMToMulaw(buffer, 24000, 1);
       
       return this.bufferToChunks(mulawBuffer);
 
@@ -241,32 +272,41 @@ export class TextToSpeech {
     }
   }
 
-  async convertPCMToMulaw(pcmBuffer) {
-    return new Promise((resolve, reject) => {
-      const chunks = [];
+  async convertPCMToMulaw(pcmBuffer, sampleRate = 24000, channels = 1) {
+    try {
+      // Convert Buffer to Int16Array
+      let pcmData = new Int16Array(
+        pcmBuffer.buffer,
+        pcmBuffer.byteOffset,
+        pcmBuffer.length / 2
+      );
       
-      const inputStream = new Readable();
-      inputStream.push(pcmBuffer);
-      inputStream.push(null);
-
-      ffmpeg(inputStream)
-        .inputFormat('s16le') // 16-bit PCM
-        .audioCodec('pcm_mulaw')
-        .audioFrequency(8000)
-        .audioChannels(1)
-        .format('mulaw')
-        .on('error', (err) => {
-          logger.error('FFmpeg PCM conversion error', { error: err.message });
-          reject(err);
-        })
-        .on('end', () => {
-          resolve(Buffer.concat(chunks));
-        })
-        .pipe()
-        .on('data', (chunk) => {
-          chunks.push(chunk);
-        });
-    });
+      // Convert stereo to mono if needed
+      if (channels === 2) {
+        pcmData = stereoToMono(pcmData);
+      }
+      
+      // Resample to 8kHz for Twilio (if not already)
+      if (sampleRate !== 8000) {
+        pcmData = resamplePCM(Buffer.from(pcmData.buffer), sampleRate, 8000);
+      }
+      
+      // Encode to mulaw using pure JS
+      const mulawBuffer = pcm16ToMulaw(pcmData);
+      
+      logger.info('PCM converted to mulaw (JS encoder)', {
+        inputSize: pcmBuffer.length,
+        sampleRate,
+        channels,
+        outputSize: mulawBuffer.length
+      });
+      
+      return mulawBuffer;
+      
+    } catch (error) {
+      logger.error('PCM to mulaw conversion error', { error: error.message });
+      throw error;
+    }
   }
 
   async mockSynthesize(text) {
