@@ -101,7 +101,7 @@ export class TextToSpeech {
           const response = await fetch(url, {
             method: 'POST',
             headers: {
-              'Accept': 'audio/wav',
+              'Accept': 'audio/basic',
               'xi-api-key': this.elevenLabsApiKey,
               'Content-Type': 'application/json'
             },
@@ -114,7 +114,7 @@ export class TextToSpeech {
                 style: 0.3,
                 use_speaker_boost: true
               },
-              output_format: 'pcm_24000' // Request PCM at 24kHz
+              output_format: 'ulaw_8000' // Request mulaw at 8kHz - exactly what Twilio needs!
             }),
             timeout: 15000
           });
@@ -133,20 +133,13 @@ export class TextToSpeech {
             throw new Error(`ElevenLabs API error: ${response.status} ${error}`);
           }
 
-          // Get the PCM audio buffer
-          const pcmBuffer = await response.buffer();
+          // Get the mulaw audio buffer directly - no conversion needed!
+          const mulawBuffer = await response.buffer();
           
-          logger.info('ElevenLabs PCM audio received', { 
-            size: pcmBuffer.length,
-            format: 'pcm_24000'
-          });
-
-          // Convert PCM to mulaw for Twilio
-          const mulawBuffer = await this.convertPCMToMulaw(pcmBuffer, 24000);
-          
-          logger.info('Audio converted to mulaw', { 
-            pcmSize: pcmBuffer.length,
-            mulawSize: mulawBuffer.length
+          logger.info('ElevenLabs mulaw audio received (ready for Twilio)', { 
+            size: mulawBuffer.length,
+            format: 'ulaw_8000',
+            note: 'No conversion needed - direct from ElevenLabs!'
           });
 
           // Return as chunks
