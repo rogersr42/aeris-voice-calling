@@ -445,3 +445,37 @@ Proprietary - Roger Rieder / RSR Works
 ---
 
 Built with ❤️ by Aeris for Roger Rieder
+
+## 💰 Cost Optimization
+
+### Using OpenAI TTS (Cheaper Alternative)
+
+OpenAI TTS is significantly cheaper than ElevenLabs:
+- **OpenAI:** ~$0.015 per 1K characters
+- **ElevenLabs:** ~$0.30 per 1K characters (Starter plan)
+
+To switch to OpenAI TTS:
+
+1. **Update `.env` locally:**
+   ```bash
+   ASSISTANT_VOICE_PROVIDER=openai
+   OPENAI_API_KEY=your_key_here
+   OPENAI_VOICE=nova  # or alloy, echo, fable, onyx, shimmer
+   ```
+
+2. **Update Render environment variables:**
+   - Go to https://dashboard.render.com
+   - Select your service
+   - Environment tab
+   - Update:
+     - `ASSISTANT_VOICE_PROVIDER` → `openai`
+     - `OPENAI_API_KEY` → your key
+     - `OPENAI_VOICE` → `nova`
+
+3. **Trigger redeploy** (or wait for next code push)
+
+**Quality comparison:**
+- **ElevenLabs:** More natural, expressive, human-like
+- **OpenAI:** Clear, professional, slightly more robotic
+- **Recommendation:** Use OpenAI for most calls, ElevenLabs for premium clients
+
