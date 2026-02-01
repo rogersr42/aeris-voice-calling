@@ -92,36 +92,51 @@ export class TextToSpeech {
     try {
       // ElevenLabs HTTP API for text-to-speech - request PCM directly
       const url = `https://api.elevenlabs.io/v1/text-to-speech/${this.voiceId}/stream`;
-      
+
       let retries = 2;
       let lastError;
 
       while (retries >= 0) {
         try {
+          const body = {
+            text: text,
+            model_id: 'eleven_turbo_v2_5',
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.75,
+              style: 0.3,
+              use_speaker_boost: true
+            }
+          };
+
+          // Check if we should request PCM or use ElevenLabs native format
+          let acceptHeader, outputFormat, usePCM = false;
+          const voiceProvider = (process.env.ASSISTANT_VOICE_PROVIDER || 'openai').toLowerCase();
+
+          if (voiceProvider === 'openai') {
+            // When falling back to OpenAI after ElevenLabs disabled, request PCM
+            acceptHeader = 'audio/basic';
+            usePCM = true;
+          } else if (voiceProvider === 'elevenlabs') {
+            // Native ElevenLabs ulaw_8000 format
+            body.output_format = 'ulaw_8000';
+            acceptHeader = 'audio/basic';
+          }
+
           const response = await fetch(url, {
             method: 'POST',
             headers: {
-              'Accept': 'audio/basic',
+              'Accept': acceptHeader,
               'xi-api-key': this.elevenLabsApiKey,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-              text: text,
-              model_id: 'eleven_turbo_v2_5',
-              voice_settings: {
-                stability: 0.5,
-                similarity_boost: 0.75,
-                style: 0.3,
-                use_speaker_boost: true
-              },
-              output_format: 'ulaw_8000' // Request mulaw at 8kHz - exactly what Twilio needs!
-            }),
+            body: JSON.stringify(body),
             timeout: 15000
           });
 
           if (!response.ok) {
             const error = await response.text();
-            
+
             // If rate limited, wait and retry
             if (response.status === 429) {
               logger.warn('Rate limited, waiting before retry', { retries });
@@ -129,20 +144,38 @@ export class TextToSpeech {
               retries--;
               continue;
             }
-            
+
             throw new Error(`ElevenLabs API error: ${response.status} ${error}`);
           }
 
-          // Get the mulaw audio buffer directly - no conversion needed!
-          const mulawBuffer = await response.buffer();
-          
-          logger.info('ElevenLabs mulaw audio received (ready for Twilio)', { 
-            size: mulawBuffer.length,
-            format: 'ulaw_8000',
-            note: 'No conversion needed - direct from ElevenLabs!'
-          });
+          // Get the audio buffer
+          const audioBuffer = await response.buffer();
 
-          // Return as chunks
+          // Convert to mulaw based on format received
+          let mulawBuffer;
+          if (usePCM || voiceProvider === 'openai') {
+            // Received PCM, need to convert
+            const pcmData = new Int16Array(
+              audioBuffer.buffer,
+              audioBuffer.byteOffset,
+              audioBuffer.length / 2
+            );
+            const mulawUint8 = alawmulaw.mulaw.encode(pcmData);
+            mulawBuffer = Buffer.from(mulawUint8);
+            logger.info('ElevenLabs PCM received and converted to mulaw', {
+              size: audioBuffer.length,
+              format: 'pcm->mulaw'
+            });
+          } else {
+            // Direct mulaw from ElevenLabs
+            mulawBuffer = audioBuffer;
+            logger.info('ElevenLabs mulaw audio received (ready for Twilio)', {
+              size: mulawBuffer.length,
+              format: 'ulaw_8000',
+              note: 'No conversion needed - direct from ElevenLabs!'
+            });
+          }
+
           return this.bufferToChunks(mulawBuffer);
 
         } catch (error) {
