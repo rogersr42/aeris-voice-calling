@@ -38,7 +38,12 @@ export class TextToSpeech {
   constructor() {
     this.provider = process.env.ASSISTANT_VOICE_PROVIDER || 'elevenlabs';
     this.rateLimiter = new RateLimiter(2); // Max 2 concurrent requests
-    
+
+    logger.info('TextToSpeech initialized', {
+      provider: this.provider,
+      envProvider: process.env.ASSISTANT_VOICE_PROVIDER || 'not set'
+    });
+
     // Initialize ElevenLabs via HTTP API
     if (this.provider === 'elevenlabs' && process.env.ELEVENLABS_API_KEY) {
       this.elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
@@ -61,9 +66,11 @@ export class TextToSpeech {
 
   async synthesize(text) {
     try {
-      logger.info('Synthesizing speech', { 
+      logger.info('Synthesizing speech', {
         text: text.substring(0, 100),
-        provider: this.provider 
+        provider: this.provider,
+        elevenLabsApiKey: this.elevenLabsApiKey ? 'set' : 'not set',
+        openai: this.openai ? 'initialized' : 'not initialized'
       });
 
       if (this.provider === 'elevenlabs' && this.elevenLabsApiKey) {
@@ -110,13 +117,12 @@ export class TextToSpeech {
           };
 
           // Check if we should request PCM or use ElevenLabs native format
-          let acceptHeader, outputFormat, usePCM = false;
-          const voiceProvider = (process.env.ASSISTANT_VOICE_PROVIDER || 'openai').toLowerCase();
+          let acceptHeader, usePCM = false;
+          const voiceProvider = (process.env.ASSISTANT_VOICE_PROVIDER || 'elevenlabs').toLowerCase();
 
           if (voiceProvider === 'openai') {
-            // When falling back to OpenAI after ElevenLabs disabled, request PCM
-            acceptHeader = 'audio/basic';
-            usePCM = true;
+            // When using OpenAI provider, ElevenLabs is disabled
+            // Just fall through to synthesizeOpenAI later if needed
           } else if (voiceProvider === 'elevenlabs') {
             // Native ElevenLabs ulaw_8000 format
             body.output_format = 'ulaw_8000';
@@ -153,18 +159,12 @@ export class TextToSpeech {
 
           // Convert to mulaw based on format received
           let mulawBuffer;
-          if (usePCM || voiceProvider === 'openai') {
-            // Received PCM, need to convert
-            const pcmData = new Int16Array(
-              audioBuffer.buffer,
-              audioBuffer.byteOffset,
-              audioBuffer.length / 2
-            );
-            const mulawUint8 = alawmulaw.mulaw.encode(pcmData);
-            mulawBuffer = Buffer.from(mulawUint8);
-            logger.info('ElevenLabs PCM received and converted to mulaw', {
-              size: audioBuffer.length,
-              format: 'pcm->mulaw'
+          if (voiceProvider === 'elevenlabs') {
+            // ElevenLabs ulaw_8000 format received directly
+            mulawBuffer = audioBuffer;
+            logger.info('ElevenLabs mulaw audio received (ready for Twilio)', {
+              size: mulawBuffer.length,
+              format: 'ulaw_8000'
             });
           } else {
             // Direct mulaw from ElevenLabs
@@ -198,8 +198,8 @@ export class TextToSpeech {
     } catch (error) {
       logger.error('ElevenLabs synthesis error', { error: error.message });
       
-      // Fallback to OpenAI if ElevenLabs fails
-      if (this.openai) {
+      // Fallback to OpenAI if ElevenLabs fails and provider is openai
+      if (this.openai && this.provider === 'openai') {
         logger.warn('Falling back to OpenAI TTS');
         return await this.synthesizeOpenAI(text);
       }
