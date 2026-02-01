@@ -217,14 +217,15 @@ export class TextToSpeech {
         pcmData = this.resamplePCM(pcmData, fromRate, 8000);
       }
       
-      // Convert Int16Array to Buffer for mulaw encoding
-      const pcm8kBuffer = Buffer.from(pcmData.buffer);
+      // Encode to mulaw using tested library (expects Int16Array, returns Uint8Array)
+      const mulawUint8 = alawmulaw.mulaw.encode(pcmData);
       
-      // Encode to mulaw using tested library
-      const mulawBuffer = alawmulaw.mulaw.encode(pcm8kBuffer);
+      // Convert Uint8Array to Buffer
+      const mulawBuffer = Buffer.from(mulawUint8);
       
       logger.info('PCM converted to mulaw', {
         inputSize: pcmBuffer.length,
+        inputSamples: pcmData.length,
         inputRate: fromRate,
         outputSize: mulawBuffer.length
       });
@@ -232,7 +233,10 @@ export class TextToSpeech {
       return mulawBuffer;
       
     } catch (error) {
-      logger.error('PCM to mulaw conversion failed', { error: error.message });
+      logger.error('PCM to mulaw conversion failed', { 
+        error: error.message,
+        stack: error.stack 
+      });
       throw error;
     }
   }

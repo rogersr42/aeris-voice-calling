@@ -239,5 +239,24 @@
     "approvedAt": "2026-02-01T08:26:50.158Z",
     "executedAt": "2026-02-01T08:26:50.658Z",
     "callSid": "CA28432423ae29ba633b83fdd492c4fe86"
+  },
+  {
+    "requestId": "call-req-1769934959309-xp5k62omc",
+    "timestamp": "2026-02-01T08:35:59.309Z",
+    "status": "executed",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Test #5 - Using tested mulaw library (final fix)",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-02-01T08:35:59.309Z",
+      "expiresAt": "2026-02-02T08:35:59.309Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-02-01T08:36:02.286Z",
+    "executedAt": "2026-02-01T08:36:02.719Z",
+    "callSid": "CAc361407b92caf4b1db1e8a55fb935aa1"
   }
 ]
