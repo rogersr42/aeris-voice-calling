@@ -163,5 +163,81 @@
     "approvedAt": "2026-01-31T19:19:27.574Z",
     "executedAt": "2026-01-31T19:19:28.031Z",
     "callSid": "CA09233c8148b426c2ea5b2299563fcbf1"
+  },
+  {
+    "requestId": "call-req-1769930576563-zb1n3yp63",
+    "timestamp": "2026-02-01T07:22:56.563Z",
+    "status": "executed",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Test STT fix - verify Aeris can hear and respond",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-02-01T07:22:56.563Z",
+      "expiresAt": "2026-02-02T07:22:56.563Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-02-01T07:23:00.489Z",
+    "executedAt": "2026-02-01T07:23:03.063Z",
+    "callSid": "CA5f42da40aee46aa7c99670fc4e8d22b3"
+  },
+  {
+    "requestId": "call-req-1769933773743-y2xdco2na",
+    "timestamp": "2026-02-01T08:16:13.743Z",
+    "status": "executed",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Second test - debugging audio issue",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-02-01T08:16:13.743Z",
+      "expiresAt": "2026-02-02T08:16:13.743Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-02-01T08:16:17.666Z",
+    "executedAt": "2026-02-01T08:16:21.484Z",
+    "callSid": "CA8bd31ffaf28d51a204a77d6b00460992"
+  },
+  {
+    "requestId": "call-req-1769934017756-czwjj0rl5",
+    "timestamp": "2026-02-01T08:20:17.756Z",
+    "status": "executed",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Test #3 - wav-encoder dependency fixed",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-02-01T08:20:17.756Z",
+      "expiresAt": "2026-02-02T08:20:17.756Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-02-01T08:20:21.310Z",
+    "executedAt": "2026-02-01T08:20:21.835Z",
+    "callSid": "CAe5c9650ab2fd27b6741b4b864a975ba6"
+  },
+  {
+    "requestId": "call-req-1769934406967-ynth3hnat",
+    "timestamp": "2026-02-01T08:26:46.967Z",
+    "status": "executed",
+    "callDetails": {
+      "to": "+41795764102",
+      "purpose": "Test #4 - Full STT+TTS fix (wav-encoder + JS mulaw)",
+      "requestedBy": "Roger Rieder",
+      "language": "en"
+    },
+    "metadata": {
+      "createdAt": "2026-02-01T08:26:46.967Z",
+      "expiresAt": "2026-02-02T08:26:46.967Z"
+    },
+    "approvedBy": "Roger Rieder",
+    "approvedAt": "2026-02-01T08:26:50.158Z",
+    "executedAt": "2026-02-01T08:26:50.658Z",
+    "callSid": "CA28432423ae29ba633b83fdd492c4fe86"
   }
 ]

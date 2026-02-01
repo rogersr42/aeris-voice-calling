@@ -2,14 +2,7 @@ import OpenAI from 'openai';
 import { logger } from '../utils/logger.js';
 import { Readable } from 'stream';
 import fetch from 'node-fetch';
-import { pcm16ToMulaw, resamplePCM, stereoToMono } from '../utils/mulaw-encoder.js';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { writeFile, unlink } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
-
-const execPromise = promisify(exec);
+import alawmulaw from 'alawmulaw';
 
 // Simple rate limiter for ElevenLabs
 class RateLimiter {
@@ -97,7 +90,7 @@ export class TextToSpeech {
     await this.rateLimiter.acquire();
 
     try {
-      // ElevenLabs HTTP API for text-to-speech with retry
+      // ElevenLabs HTTP API for text-to-speech - request PCM directly
       const url = `https://api.elevenlabs.io/v1/text-to-speech/${this.voiceId}/stream`;
       
       let retries = 2;
@@ -108,7 +101,7 @@ export class TextToSpeech {
           const response = await fetch(url, {
             method: 'POST',
             headers: {
-              'Accept': 'audio/mpeg',
+              'Accept': 'audio/wav',
               'xi-api-key': this.elevenLabsApiKey,
               'Content-Type': 'application/json'
             },
@@ -121,7 +114,7 @@ export class TextToSpeech {
                 style: 0.3,
                 use_speaker_boost: true
               },
-              output_format: 'mp3_44100_128'
+              output_format: 'pcm_24000' // Request PCM at 24kHz
             }),
             timeout: 15000
           });
@@ -140,19 +133,19 @@ export class TextToSpeech {
             throw new Error(`ElevenLabs API error: ${response.status} ${error}`);
           }
 
-          // Get the audio buffer
-          const mp3Buffer = await response.buffer();
+          // Get the PCM audio buffer
+          const pcmBuffer = await response.buffer();
           
-          logger.info('ElevenLabs audio received', { 
-            size: mp3Buffer.length,
-            format: 'mp3'
+          logger.info('ElevenLabs PCM audio received', { 
+            size: pcmBuffer.length,
+            format: 'pcm_24000'
           });
 
-          // Convert MP3 to mulaw PCM for Twilio
-          const mulawBuffer = await this.convertToMulaw(mp3Buffer);
+          // Convert PCM to mulaw for Twilio
+          const mulawBuffer = await this.convertPCMToMulaw(pcmBuffer, 24000);
           
           logger.info('Audio converted to mulaw', { 
-            originalSize: mp3Buffer.length,
+            pcmSize: pcmBuffer.length,
             mulawSize: mulawBuffer.length
           });
 
@@ -161,7 +154,7 @@ export class TextToSpeech {
 
         } catch (error) {
           lastError = error;
-          if (retries > 0 && !error.message.includes('ffmpeg')) {
+          if (retries > 0) {
             logger.warn('ElevenLabs request failed, retrying', { 
               retries, 
               error: error.message 
@@ -190,61 +183,56 @@ export class TextToSpeech {
     }
   }
 
-  async convertToMulaw(mp3Buffer) {
+  // Simple PCM resampling (linear interpolation)
+  resamplePCM(pcmData, fromRate, toRate) {
+    const ratio = fromRate / toRate;
+    const outputLength = Math.floor(pcmData.length / ratio);
+    const output = new Int16Array(outputLength);
+    
+    for (let i = 0; i < outputLength; i++) {
+      const srcIndex = i * ratio;
+      const srcIndexFloor = Math.floor(srcIndex);
+      const srcIndexCeil = Math.min(srcIndexFloor + 1, pcmData.length - 1);
+      const frac = srcIndex - srcIndexFloor;
+      
+      output[i] = Math.round(
+        pcmData[srcIndexFloor] * (1 - frac) + pcmData[srcIndexCeil] * frac
+      );
+    }
+    
+    return output;
+  }
+
+  async convertPCMToMulaw(pcmBuffer, fromRate = 24000) {
     try {
-      // First decode MP3 to PCM using ffmpeg (if available), otherwise use system ffmpeg
-      const tempMp3 = join(tmpdir(), `tts-${Date.now()}.mp3`);
-      const tempPcm = join(tmpdir(), `tts-${Date.now()}.pcm`);
-      
-      await writeFile(tempMp3, mp3Buffer);
-      
-      // Try to decode MP3 to raw PCM
-      try {
-        await execPromise(
-          `ffmpeg -i "${tempMp3}" -f s16le -ar 24000 -ac 1 "${tempPcm}" -y`,
-          { timeout: 10000 }
-        );
-      } catch (ffmpegError) {
-        logger.warn('FFmpeg not available, falling back to mock audio', { 
-          error: ffmpegError.message 
-        });
-        // Clean up temp files
-        await unlink(tempMp3).catch(() => {});
-        await unlink(tempPcm).catch(() => {});
-        throw new Error('FFmpeg unavailable');
-      }
-      
-      // Read the PCM file
-      const fs = await import('fs/promises');
-      const pcmBuffer = await fs.readFile(tempPcm);
-      
-      // Clean up temp files
-      await unlink(tempMp3).catch(() => {});
-      await unlink(tempPcm).catch(() => {});
-      
-      // Convert PCM to mulaw using pure JS
-      const pcmData = new Int16Array(
+      // Convert Buffer to Int16Array
+      let pcmData = new Int16Array(
         pcmBuffer.buffer,
         pcmBuffer.byteOffset,
         pcmBuffer.length / 2
       );
       
-      // Resample from 24kHz to 8kHz for Twilio
-      const resampled = resamplePCM(pcmBuffer, 24000, 8000);
+      // Resample to 8kHz if needed
+      if (fromRate !== 8000) {
+        pcmData = this.resamplePCM(pcmData, fromRate, 8000);
+      }
       
-      // Encode to mulaw
-      const mulawBuffer = pcm16ToMulaw(resampled);
+      // Convert Int16Array to Buffer for mulaw encoding
+      const pcm8kBuffer = Buffer.from(pcmData.buffer);
       
-      logger.info('Audio converted to mulaw (JS encoder)', {
-        originalSize: mp3Buffer.length,
-        pcmSize: pcmBuffer.length,
-        mulawSize: mulawBuffer.length
+      // Encode to mulaw using tested library
+      const mulawBuffer = alawmulaw.mulaw.encode(pcm8kBuffer);
+      
+      logger.info('PCM converted to mulaw', {
+        inputSize: pcmBuffer.length,
+        inputRate: fromRate,
+        outputSize: mulawBuffer.length
       });
       
       return mulawBuffer;
       
     } catch (error) {
-      logger.error('MP3 to mulaw conversion failed', { error: error.message });
+      logger.error('PCM to mulaw conversion failed', { error: error.message });
       throw error;
     }
   }
@@ -259,10 +247,15 @@ export class TextToSpeech {
         response_format: 'pcm' // Get PCM directly
       });
 
-      const buffer = Buffer.from(await mp3.arrayBuffer());
+      const pcmBuffer = Buffer.from(await mp3.arrayBuffer());
+      
+      logger.info('OpenAI PCM audio received', {
+        size: pcmBuffer.length,
+        format: 'pcm_24000'
+      });
       
       // OpenAI returns PCM at 24kHz, mono, 16-bit
-      const mulawBuffer = await this.convertPCMToMulaw(buffer, 24000, 1);
+      const mulawBuffer = await this.convertPCMToMulaw(pcmBuffer, 24000);
       
       return this.bufferToChunks(mulawBuffer);
 
